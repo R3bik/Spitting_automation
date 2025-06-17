@@ -175,7 +175,10 @@ class Splitter:
             per_day = SMS_amount // days
             extra = SMS_amount % days
             start = 0
-            for i in range(days):
+            if SMS_amount == 0:
+                messagebox.showwarning("Warning", "⚠️ SMS amount is 0. No SMS files will be created.")
+            else:
+              for i in range(days):
                 chunk = per_day + 1 if i < extra else per_day
                 end = start + chunk
                 chunk_df = SMS_dataframe.iloc[start:end]
@@ -192,21 +195,24 @@ class Splitter:
             per_day_OCD = OBD_amount // days_OBD
             extra_OCD = OBD_amount % days_OBD
             start_OBD = 0
-            for i in range(days_OBD):
-                chunk_OCD = per_day_OCD + 1 if i < extra_OCD else per_day_OCD
-                ed = start_OBD + chunk_OCD
-                chunk_df_OCD = OCD_dataframe.iloc[start_OBD:ed]
-                chunk_df_OCD = pd.concat([chunk_df_OCD, company_df_OCD], ignore_index=False)
-                filename = f"OBD_split_day{i+1}.txt"
-                filepath = f"{output_obd}/{filename}"
-                with open(filepath, "w") as f:
-                    f.write("Phone number\n")
-                    for number in chunk_df_OCD["Phone number"]:
-                        f.write(str(number).strip() + "\n")
-                start_OBD = ed
+            if OBD_amount == 0:
+                 messagebox.showwarning("Warning", "⚠️ OBD amount is 0. No OBD files will be created.")
+            else:
+                for i in range(days_OBD):
+                    chunk_OCD = per_day_OCD + 1 if i < extra_OCD else per_day_OCD
+                    ed =   start_OBD + chunk_OCD
+                    chunk_df_OCD = OCD_dataframe.iloc[start_OBD:ed]
+                    chunk_df_OCD = pd.concat([chunk_df_OCD, company_df_OCD], ignore_index=False)
+                    filename = f"OBD_split_day{i+1}.txt"
+                    filepath = f"{output_obd}/{filename}"
+                    with open(filepath, "w") as f:
+                        f.write("Phone number\n")
+                        for number in chunk_df_OCD["Phone number"]:
+                            f.write(str(number).strip() + "\n")
+                    start_OBD = ed
 
             # ✅ Success popup
-            messagebox.showinfo("Success", "✅ Process completed successfully!")
+            messagebox.showinfo("Success", " Process completed successfully!")
 
         except Exception as e:
             messagebox.showerror("Error", f"Something went wrong:\n{str(e)}")
