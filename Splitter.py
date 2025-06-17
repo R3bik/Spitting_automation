@@ -6,7 +6,7 @@ import pandas as pd
 class Splitter:
     def __init__(self, root):
         root.title("Phone Number Splitter")
-        root.geometry("1100x650")
+        root.geometry("1100x700")
 
         self.entries = {}
 
@@ -22,11 +22,14 @@ class Splitter:
         self.input_frame.pack(padx=10, pady=10, fill="x")
 
         self._add_input_field(self.input_frame, "SMS Amount:", 0, column=0, key="sms")
-        self._add_input_field(self.input_frame, "Days for SMS:", 1, column=0, key="days_sms")
-        self._add_input_field(self.input_frame, "Days for OBD:", 1, column=2, key="days_obd")
+        self._add_input_field(self.input_frame, "Days for SMS:", row=1, column=0, key="days_sms")
+        self._add_input_field(self.input_frame, "Days for OBD:", row=1, column=2, key="days_obd")
 
         self.obd_amount_label = tk.Label(self.input_frame, text="OBD Amount: N/A")
         self.obd_amount_label.grid(row=0, column=2, padx=10, sticky="w")
+
+        self.total_label = tk.Label(self.input_frame, text="Total: N/A")
+        self.total_label.grid(row=0, column=4, padx=10, sticky="w")
 
         # Output Folder Frame
         self.output_frame = tk.LabelFrame(root, text="Select Output Folders", padx=10, pady=10)
@@ -51,12 +54,10 @@ class Splitter:
         label.grid(row=row, column=0, sticky="e")
         entry = tk.Entry(parent, width=70)
         entry.grid(row=row, column=1, padx=5)
-        button = tk.Button(parent, text="Browse", command=lambda: self.browse_file(entry))
+        button = tk.Button(parent, text="Browse", command=lambda: self.browse_file(entry, is_company))
         button.grid(row=row, column=2)
         key = "company" if is_company else "main"
         self.entries[key] = entry
-        if not is_company:
-            entry.bind("<FocusOut>", lambda event: self.update_OBD_amount())
 
     def _add_folder_selector(self, parent, text, row, key):
         label = tk.Label(parent, text=text)
@@ -67,7 +68,7 @@ class Splitter:
         button.grid(row=row, column=2)
         self.entries[key] = entry
 
-    def _add_input_field(self, parent, text, row, key, column=0, on_change=None, readonly=False, is_label=False):
+    def _add_input_field(self, parent, text, row, key, column=0):
         label = tk.Label(parent, text=text)
         label.grid(row=row, column=column, sticky="e")
         entry = tk.Entry(parent)
@@ -81,11 +82,13 @@ class Splitter:
     def _validate_positive_int(self, value):
         return value.isdigit() or value == ""
 
-    def browse_file(self, entry):
+    def browse_file(self, entry, is_company):
         path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
         if path:
             entry.delete(0, tk.END)
             entry.insert(0, path)
+            if not is_company:
+                self.update_OBD_amount()
 
     def browse_folder(self, entry):
         path = filedialog.askdirectory()
@@ -97,15 +100,16 @@ class Splitter:
         try:
             main_file = self.entries["main"].get()
             sms_amount = int(self.entries['sms'].get())
-            df = pd.read_csv(main_file)
+            df = pd.read_csv(main_file, encoding="utf-8-sig")
+            df.columns = df.columns.str.strip()
+            phone_col = df.columns[0]
             total = len(df)
             obd_amount = total - sms_amount
-            if obd_amount < 0:
-                self.obd_amount_label.config(text="OBD Amount: Error")
-            else:
-                self.obd_amount_label.config(text=f"OBD Amount: {obd_amount}")
+            self.obd_amount_label.config(text=f"OBD Amount: {obd_amount if obd_amount >= 0 else 'Error'}")
+            self.total_label.config(text=f"Total: {total}")
         except:
             self.obd_amount_label.config(text="OBD Amount: N/A")
+            self.total_label.config(text="Total: N/A")
 
     def split_files(self):
         try:
@@ -117,7 +121,9 @@ class Splitter:
             output_sms = self.entries['output_sms'].get()
             output_obd = self.entries['output_obd'].get()
 
-            df_main = pd.read_csv(main_file)
+            df_main = pd.read_csv(main_file, encoding="utf-8-sig")
+            df_main.columns = df_main.columns.str.strip()
+            phone_col = df_main.columns[0]
             df_company = pd.read_csv(company_file)
 
             total_numbers = len(df_main)
@@ -130,13 +136,13 @@ class Splitter:
             df_sms = df_main.iloc[:sms_amount].copy()
             df_obd = df_main.iloc[sms_amount:].copy()
 
-            df_sms['Phone number'] = df_sms['Phone number'].astype(str).str.replace(".0", "", regex=False)
-            df_obd['Phone number'] = df_obd['Phone number'].astype(str).str.replace(".0", "", regex=False)
-            df_obd['Phone number'] = df_obd['Phone number'].str.replace("^977", "", regex=True)
+            df_sms[phone_col] = df_sms[phone_col].astype(str).str.replace(".0", "", regex=False)
+            df_obd[phone_col] = df_obd[phone_col].astype(str).str.replace(".0", "", regex=False)
+            df_obd[phone_col] = df_obd[phone_col].str.replace("^977", "", regex=True)
 
-            company_sms = pd.DataFrame(company_numbers, columns=["Phone number"])
+            company_sms = pd.DataFrame(company_numbers, columns=[phone_col])
             company_obd = company_sms.copy()
-            company_obd['Phone number'] = company_obd['Phone number'].str.replace("^977", "", regex=True)
+            company_obd[phone_col] = company_obd[phone_col].str.replace("^977", "", regex=True)
 
             report = []
 
