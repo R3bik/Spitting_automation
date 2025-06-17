@@ -1,223 +1,190 @@
 import tkinter as tk
-import tkinter.filedialog as fd
-from tkinter import messagebox
-import csv
+from tkinter import messagebox, filedialog
+import os
 import pandas as pd
 
 class Splitter:
-    def __init__(self,root):
-        root.title("Splitter")
-        root.geometry("700x400")
+    def __init__(self, root):
+        root.title("Phone Number Splitter")
+        root.geometry("1100x650")
 
-        self.mainfile_frame = tk.Frame(root)
-        self.mainfile_frame.pack(side='top', pady=20)
+        self.entries = {}
 
-        self.input_frame = tk.Frame(root)
-        self.input_frame.pack()
+        # File Selection Frame
+        self.file_frame = tk.LabelFrame(root, text="Select Files", padx=10, pady=10)
+        self.file_frame.pack(padx=10, pady=10, fill="x")
 
-        self.output_frame = tk.Frame(root)
-        self.output_frame.pack()
+        self._add_file_selector(self.file_frame, "Main File:", 0, is_company=False)
+        self._add_file_selector(self.file_frame, "Company Numbers File:", 1, is_company=True)
 
-        # Main file
-        self.browse_button = tk.Button(self.mainfile_frame, text='Browse', command= self.browse_file)
-        self.browse_button.grid(row=0, column=2 ,padx=5,pady=5)
-        self.file_entry = tk.Entry(self.mainfile_frame, width=50)
-        self.file_entry.grid(row=0,column=1,padx=5,pady=5)
-        self.file_label = tk.Label(self.mainfile_frame, text="Main file")
-        self.file_label.grid(row=0 ,column=0,padx=5,pady=5)
-        self.total_rows_label = tk.Label(self.mainfile_frame, text="Total Rows: N/A")
-        self.total_rows_label.grid(row=0, column=3, padx=5, pady=5)
+        # Input Frame
+        self.input_frame = tk.LabelFrame(root, text="Input Settings", padx=10, pady=10)
+        self.input_frame.pack(padx=10, pady=10, fill="x")
 
+        self._add_input_field(self.input_frame, "SMS Amount:", 0, column=0, key="sms")
+        self._add_input_field(self.input_frame, "Days for SMS:", 1, column=0, key="days_sms")
+        self._add_input_field(self.input_frame, "Days for OBD:", 1, column=2, key="days_obd")
 
-        # Company numbers
-        self.browse_company = tk.Button(self.mainfile_frame, text='Browse', command= self.company_file)
-        self.browse_company.grid(row=1, column=2 ,padx=5,pady=5)
-        self.company_entry = tk.Entry(self.mainfile_frame, width=50)
-        self.company_entry.grid(row=1,column=1,padx=5,pady=5)
-        self.company_label = tk.Label(self.mainfile_frame, text="Company numbers")
-        self.company_label.grid(row=1 ,column=0,padx=5,pady=5)
+        self.obd_amount_label = tk.Label(self.input_frame, text="OBD Amount: N/A")
+        self.obd_amount_label.grid(row=0, column=2, padx=10, sticky="w")
 
-        # SMS amount
-        
-        self.sms_entry = tk.Entry(self.input_frame,width=20)
-        self.sms_entry.grid(row=1, column = 1, padx=4,pady=2)
-        self.sms_entry.bind("<KeyRelease>", lambda event: self.update_OBD_amount())  # 👈 Add this line
-        self.sms_label = tk.Label(self.input_frame,text="SMS amount")
-        self.sms_label.grid(row=1,column=0, padx=5,pady=2)
+        # Output Folder Frame
+        self.output_frame = tk.LabelFrame(root, text="Select Output Folders", padx=10, pady=10)
+        self.output_frame.pack(padx=10, pady=10, fill="x")
 
+        self._add_folder_selector(self.output_frame, "Output Folder for SMS:", 0, key="output_sms")
+        self._add_folder_selector(self.output_frame, "Output Folder for OBD:", 1, key="output_obd")
 
-        # OBD amount
-        self.OBD_label = tk.Label(self.input_frame,text="OBD amount : ")
-        self.OBD_label.grid(row=1,column=2, padx=5,pady=2)
-        self.OBD_amount_label = tk.Label(self.input_frame,text="")
-        self.OBD_amount_label.grid(row=1,column=3, padx=5,pady=2)
+        # Run Button
+        self.run_button = tk.Button(root, text="Start Splitting", command=self.split_files, bg="green", fg="white", height=2, width=20)
+        self.run_button.pack(pady=10)
 
-        # Days for SMS
-        self.days_entry_SMS = tk.Entry(self.input_frame,width=20)
-        self.days_entry_SMS.grid(row=2, column = 1, padx=4,pady=2)
-        self.days_label_SMS = tk.Label(self.input_frame,text="Days for SMS")
-        self.days_label_SMS.grid(row=2,column=0, padx=4,pady=2)
+        # Report Frame
+        self.report_frame = tk.LabelFrame(root, text="Summary Report", padx=10, pady=10)
+        self.report_frame.pack(padx=10, pady=10, fill="both", expand=True)
 
-        # Days for OBD
-        self.days_entry_OBD = tk.Entry(self.input_frame,width=20)
-        self.days_entry_OBD.grid(row=2, column = 3, padx=4,pady=2)
-        self.days_label_OBD = tk.Label(self.input_frame,text="Days for OBD")
-        self.days_label_OBD.grid(row=2,column=2, padx=4,pady=2)
+        self.report_text = tk.Text(self.report_frame, state="disabled", height=15)
+        self.report_text.pack(fill="both", expand=True)
 
-        # Start button
-        self.split_button = tk.Button(self.output_frame,text="Start Splitting",command=self.split_files)
-        self.split_button.grid(row=3,column=1,pady=20)
+    def _add_file_selector(self, parent, text, row, is_company):
+        label = tk.Label(parent, text=text)
+        label.grid(row=row, column=0, sticky="e")
+        entry = tk.Entry(parent, width=70)
+        entry.grid(row=row, column=1, padx=5)
+        button = tk.Button(parent, text="Browse", command=lambda: self.browse_file(entry))
+        button.grid(row=row, column=2)
+        key = "company" if is_company else "main"
+        self.entries[key] = entry
+        if not is_company:
+            entry.bind("<FocusOut>", lambda event: self.update_OBD_amount())
 
-        # SMS output folder
-        self.sms_output_entry = tk.Entry(self.output_frame,width=50)
-        self.sms_output_entry.grid(row=0, column = 1, padx=5,pady=5)
-        self.sms_output_label = tk.Label(self.output_frame,text="Output for SMS")
-        self.sms_output_label.grid(row=0,column=0, padx=5,pady=5)
-        self.sms_output_button = tk.Button(self.output_frame,text="Browse",command=self.browse_sms_output_folder)
-        self.sms_output_button.grid(row=0,column=2,padx=5,pady=5)
+    def _add_folder_selector(self, parent, text, row, key):
+        label = tk.Label(parent, text=text)
+        label.grid(row=row, column=0, sticky="e")
+        entry = tk.Entry(parent, width=70)
+        entry.grid(row=row, column=1, padx=5)
+        button = tk.Button(parent, text="Browse", command=lambda: self.browse_folder(entry))
+        button.grid(row=row, column=2)
+        self.entries[key] = entry
 
-        # OBD output folder
-        self.OBD_output_entry = tk.Entry(self.output_frame,width=50)
-        self.OBD_output_entry.grid(row=1, column = 1, padx=5,pady=5)
-        self.OBD_output_label = tk.Label(self.output_frame,text="Output for OBD")
-        self.OBD_output_label.grid(row=1,column=0, padx=5,pady=5)
-        self.OBD_output_button = tk.Button(self.output_frame,text="Browse",command=self.browse_ocd_output_folder)
-        self.OBD_output_button.grid(row=1,column=2,padx=5,pady=5)
+    def _add_input_field(self, parent, text, row, key, column=0, on_change=None, readonly=False, is_label=False):
+        label = tk.Label(parent, text=text)
+        label.grid(row=row, column=column, sticky="e")
+        entry = tk.Entry(parent)
+        entry.grid(row=row, column=column + 1, padx=5, sticky="w")
+        vcmd = (parent.register(self._validate_positive_int), '%P')
+        entry.config(validate='key', validatecommand=vcmd)
+        self.entries[key] = entry
+        if key == "sms":
+            entry.bind("<KeyRelease>", lambda event: self.update_OBD_amount())
 
-    def browse_file(self):
-        file_path = fd.askopenfilename(filetypes=(("CSV File","*.csv"),("All Files","*.*")))
-        if file_path:
-            self.file_entry.delete(0, tk.END)
-            self.file_entry.insert(0, file_path)
+    def _validate_positive_int(self, value):
+        return value.isdigit() or value == ""
 
-        try:
-            df = pd.read_csv(file_path)
-            total_rows = len(df)
-            self.total_rows_label.config(text=f"Total Rows: {total_rows}")
-        except Exception as e:
-            self.total_rows_label.config(text="Total Rows: Error")
+    def browse_file(self, entry):
+        path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
+        if path:
+            entry.delete(0, tk.END)
+            entry.insert(0, path)
 
-    def company_file(self):
-        file_path = fd.askopenfilename(filetypes=(("CSV File","*.csv"),("All Files","*.*")))
-        if file_path:
-            self.company_entry.delete(0, tk.END)
-            self.company_entry.insert(0, file_path)
+    def browse_folder(self, entry):
+        path = filedialog.askdirectory()
+        if path:
+            entry.delete(0, tk.END)
+            entry.insert(0, path)
 
-    def browse_sms_output_folder(self):
-        folder_path = fd.askdirectory()
-        if folder_path:
-            self.sms_output_entry.delete(0, tk.END)
-            self.sms_output_entry.insert(0, folder_path)
-
-    def browse_ocd_output_folder(self):
-        folder_path = fd.askdirectory()
-        if folder_path:
-            self.OBD_output_entry.delete(0, tk.END)
-            self.OBD_output_entry.insert(0, folder_path)
     def update_OBD_amount(self):
         try:
-            sms_val = self.sms_entry.get()
-            file_path = self.file_entry.get()
-
-            if sms_val.strip() == "" or file_path.strip() == "":
-                self.OBD_amount_label.config(text="")
-                return
-
-            SMS_amount = int(sms_val)
-            df = pd.read_csv(file_path)
-            OBD_amount = len(df) - SMS_amount
-            self.OBD_amount_label.config(text=str(OBD_amount))
-        except Exception as e:
-                self.OBD_amount_label.config(text="Error")
+            main_file = self.entries["main"].get()
+            sms_amount = int(self.entries['sms'].get())
+            df = pd.read_csv(main_file)
+            total = len(df)
+            obd_amount = total - sms_amount
+            if obd_amount < 0:
+                self.obd_amount_label.config(text="OBD Amount: Error")
+            else:
+                self.obd_amount_label.config(text=f"OBD Amount: {obd_amount}")
+        except:
+            self.obd_amount_label.config(text="OBD Amount: N/A")
 
     def split_files(self):
         try:
-            main_file = self.file_entry.get()
-            company_file = self.company_entry.get()
-            SMS_amount = int(self.sms_entry.get())
-            days = int(self.days_entry_SMS.get())
-            days_OBD = int(self.days_entry_OBD.get())
-            output_sms = self.sms_output_entry.get()
-            output_obd = self.OBD_output_entry.get()
+            main_file = self.entries["main"].get()
+            company_file = self.entries["company"].get()
+            sms_amount = int(self.entries['sms'].get()) if self.entries['sms'].get().isdigit() else 0
+            days_sms = int(self.entries['days_sms'].get())
+            days_obd = int(self.entries['days_obd'].get())
+            output_sms = self.entries['output_sms'].get()
+            output_obd = self.entries['output_obd'].get()
 
-            df = pd.read_csv(main_file)
-            cdf = pd.read_csv(company_file)
+            df_main = pd.read_csv(main_file)
+            df_company = pd.read_csv(company_file)
 
-            number_list = cdf.values.ravel()
-            cleaned_numbers = [
-                str(num).replace(".0", "")
-                for num in number_list
-                if pd.notna(num) and "Phone" not in str(num) and str(num).strip() != ""
-            ]
+            total_numbers = len(df_main)
+            obd_amount = total_numbers - sms_amount
 
-            company_df = pd.DataFrame(cleaned_numbers, columns=["Phone number"])
-            company_df_SMS = company_df.copy()
-            company_df_OCD = company_df.copy()
+            df_company_cleaned = df_company.dropna()
+            company_numbers = df_company_cleaned[df_company_cleaned.columns[0]].astype(str)
+            company_numbers = company_numbers[~company_numbers.str.contains("[a-zA-Z]", regex=True)]
 
-            company_df_SMS["Phone number"] = company_df_SMS["Phone number"].astype(str).str.replace(".0", "", regex=False)
-            company_df_OCD["Phone number"] = company_df_OCD["Phone number"].astype(str).str.replace(".0", "", regex=False)
-            company_df_OCD['Phone number'] = company_df_OCD['Phone number'].astype(str).str.replace("^977", "", regex=True)
+            df_sms = df_main.iloc[:sms_amount].copy()
+            df_obd = df_main.iloc[sms_amount:].copy()
 
-            total_number = len(df)
-            if SMS_amount > total_number:
-                messagebox.showerror("Error", "SMS amount exceeds total phone numbers!")
-                return
+            df_sms['Phone number'] = df_sms['Phone number'].astype(str).str.replace(".0", "", regex=False)
+            df_obd['Phone number'] = df_obd['Phone number'].astype(str).str.replace(".0", "", regex=False)
+            df_obd['Phone number'] = df_obd['Phone number'].str.replace("^977", "", regex=True)
 
-            OBD_amount = total_number - SMS_amount
+            company_sms = pd.DataFrame(company_numbers, columns=["Phone number"])
+            company_obd = company_sms.copy()
+            company_obd['Phone number'] = company_obd['Phone number'].str.replace("^977", "", regex=True)
 
-            SMS_dataframe = df.iloc[0:SMS_amount, 0:1]
-            OCD_dataframe = df.iloc[SMS_amount:total_number, 0:1]
+            report = []
 
-            OCD_dataframe["Phone number"] = OCD_dataframe["Phone number"].astype(str).str.replace(".0", "", regex=False)
-            OCD_dataframe["Phone number"] = OCD_dataframe["Phone number"].str.replace("^977", "", regex=True)
-
-            # SMS splitting
-            per_day = SMS_amount // days
-            extra = SMS_amount % days
-            start = 0
-            if SMS_amount == 0:
-                messagebox.showwarning("Warning", "⚠️ SMS amount is 0. No SMS files will be created.")
+            # SMS
+            if sms_amount > 0:
+                chunk_size_sms = sms_amount // days_sms
+                extra_sms = sms_amount % days_sms
+                start = 0
+                report.append(f"Files created for SMS ({sms_amount} numbers):")
+                for i in range(days_sms):
+                    end = start + chunk_size_sms + (1 if i < extra_sms else 0)
+                    chunk = df_sms.iloc[start:end]
+                    final_chunk = pd.concat([chunk, company_sms], ignore_index=True)
+                    filepath = os.path.join(output_sms, f"SMS_Day{i+1}.txt")
+                    final_chunk.to_csv(filepath, index=False, header=False)
+                    report.append(f" - SMS_Day{i+1}.txt ({len(final_chunk)} numbers)")
+                    start = end
             else:
-              for i in range(days):
-                chunk = per_day + 1 if i < extra else per_day
-                end = start + chunk
-                chunk_df = SMS_dataframe.iloc[start:end]
-                chunk_df = pd.concat([chunk_df, company_df_SMS], ignore_index=False)
-                filename = f"SMS_split_day{i+1}.txt"
-                filepath = f"{output_sms}/{filename}"
-                with open(filepath, "w") as f:
-                    f.write("Phone number\n")
-                    for number in chunk_df["Phone number"]:
-                        f.write(str(number).strip() + "\n")
-                start = end
+                report.append("\u26a0\ufe0f SMS amount is 0. No SMS files were created.")
 
-            # OBD splitting
-            per_day_OCD = OBD_amount // days_OBD
-            extra_OCD = OBD_amount % days_OBD
-            start_OBD = 0
-            if OBD_amount == 0:
-                 messagebox.showwarning("Warning", "⚠️ OBD amount is 0. No OBD files will be created.")
+            # OBD
+            if obd_amount > 0:
+                chunk_size_obd = obd_amount // days_obd
+                extra_obd = obd_amount % days_obd
+                start = 0
+                report.append(f"\nFiles created for OBD ({obd_amount} numbers):")
+                for i in range(days_obd):
+                    end = start + chunk_size_obd + (1 if i < extra_obd else 0)
+                    chunk = df_obd.iloc[start:end]
+                    final_chunk = pd.concat([chunk, company_obd], ignore_index=True)
+                    filepath = os.path.join(output_obd, f"OBD_Day{i+1}.txt")
+                    final_chunk.to_csv(filepath, index=False, header=False)
+                    report.append(f" - OBD_Day{i+1}.txt ({len(final_chunk)} numbers)")
+                    start = end
             else:
-                for i in range(days_OBD):
-                    chunk_OCD = per_day_OCD + 1 if i < extra_OCD else per_day_OCD
-                    ed =   start_OBD + chunk_OCD
-                    chunk_df_OCD = OCD_dataframe.iloc[start_OBD:ed]
-                    chunk_df_OCD = pd.concat([chunk_df_OCD, company_df_OCD], ignore_index=False)
-                    filename = f"OBD_split_day{i+1}.txt"
-                    filepath = f"{output_obd}/{filename}"
-                    with open(filepath, "w") as f:
-                        f.write("Phone number\n")
-                        for number in chunk_df_OCD["Phone number"]:
-                            f.write(str(number).strip() + "\n")
-                    start_OBD = ed
+                report.append("\u26a0\ufe0f OBD amount is 0. No OBD files were created.")
 
-            # ✅ Success popup
-            messagebox.showinfo("Success", " Process completed successfully!")
+            self.report_text.config(state="normal")
+            self.report_text.delete("1.0", tk.END)
+            self.report_text.insert(tk.END, "\n".join(report))
+            self.report_text.config(state="disabled")
+
+            messagebox.showinfo("Success", "Splitting completed successfully!")
 
         except Exception as e:
-            messagebox.showerror("Error", f"Something went wrong:\n{str(e)}")
+            messagebox.showerror("Error", f"An error occurred:\n{e}")
 
 if __name__ == "__main__":
-    window = tk.Tk()
-    app = Splitter(window)
-    window.mainloop()
+    root = tk.Tk()
+    app = Splitter(root)
+    root.mainloop()
