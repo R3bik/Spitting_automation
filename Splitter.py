@@ -7,7 +7,7 @@ import pandas as pd
 class Splitter:
     def __init__(self,root):
         root.title("Splitter")
-        root.geometry("500x300")
+        root.geometry("700x400")
 
         self.mainfile_frame = tk.Frame(root)
         self.mainfile_frame.pack(side='top', pady=20)
@@ -25,6 +25,9 @@ class Splitter:
         self.file_entry.grid(row=0,column=1,padx=5,pady=5)
         self.file_label = tk.Label(self.mainfile_frame, text="Main file")
         self.file_label.grid(row=0 ,column=0,padx=5,pady=5)
+        self.total_rows_label = tk.Label(self.mainfile_frame, text="Total Rows: N/A")
+        self.total_rows_label.grid(row=0, column=3, padx=5, pady=5)
+
 
         # Company numbers
         self.browse_company = tk.Button(self.mainfile_frame, text='Browse', command= self.company_file)
@@ -35,16 +38,31 @@ class Splitter:
         self.company_label.grid(row=1 ,column=0,padx=5,pady=5)
 
         # SMS amount
+        
         self.sms_entry = tk.Entry(self.input_frame,width=20)
         self.sms_entry.grid(row=1, column = 1, padx=4,pady=2)
+        self.sms_entry.bind("<KeyRelease>", lambda event: self.update_OBD_amount())  # 👈 Add this line
         self.sms_label = tk.Label(self.input_frame,text="SMS amount")
-        self.sms_label.grid(row=1,column=0, padx=4,pady=2)
+        self.sms_label.grid(row=1,column=0, padx=5,pady=2)
 
-        # Days
-        self.days_entry = tk.Entry(self.input_frame,width=20)
-        self.days_entry.grid(row=2, column = 1, padx=4,pady=2)
-        self.days_label = tk.Label(self.input_frame,text="Days")
-        self.days_label.grid(row=2,column=0, padx=4,pady=2)
+
+        # OBD amount
+        self.OBD_label = tk.Label(self.input_frame,text="OBD amount : ")
+        self.OBD_label.grid(row=1,column=2, padx=5,pady=2)
+        self.OBD_amount_label = tk.Label(self.input_frame,text="")
+        self.OBD_amount_label.grid(row=1,column=3, padx=5,pady=2)
+
+        # Days for SMS
+        self.days_entry_SMS = tk.Entry(self.input_frame,width=20)
+        self.days_entry_SMS.grid(row=2, column = 1, padx=4,pady=2)
+        self.days_label_SMS = tk.Label(self.input_frame,text="Days for SMS")
+        self.days_label_SMS.grid(row=2,column=0, padx=4,pady=2)
+
+        # Days for OBD
+        self.days_entry_OBD = tk.Entry(self.input_frame,width=20)
+        self.days_entry_OBD.grid(row=2, column = 3, padx=4,pady=2)
+        self.days_label_OBD = tk.Label(self.input_frame,text="Days for OBD")
+        self.days_label_OBD.grid(row=2,column=2, padx=4,pady=2)
 
         # Start button
         self.split_button = tk.Button(self.output_frame,text="Start Splitting",command=self.split_files)
@@ -72,6 +90,13 @@ class Splitter:
             self.file_entry.delete(0, tk.END)
             self.file_entry.insert(0, file_path)
 
+        try:
+            df = pd.read_csv(file_path)
+            total_rows = len(df)
+            self.total_rows_label.config(text=f"Total Rows: {total_rows}")
+        except Exception as e:
+            self.total_rows_label.config(text="Total Rows: Error")
+
     def company_file(self):
         file_path = fd.askopenfilename(filetypes=(("CSV File","*.csv"),("All Files","*.*")))
         if file_path:
@@ -89,13 +114,29 @@ class Splitter:
         if folder_path:
             self.OBD_output_entry.delete(0, tk.END)
             self.OBD_output_entry.insert(0, folder_path)
+    def update_OBD_amount(self):
+        try:
+            sms_val = self.sms_entry.get()
+            file_path = self.file_entry.get()
+
+            if sms_val.strip() == "" or file_path.strip() == "":
+                self.OBD_amount_label.config(text="")
+                return
+
+            SMS_amount = int(sms_val)
+            df = pd.read_csv(file_path)
+            OBD_amount = len(df) - SMS_amount
+            self.OBD_amount_label.config(text=str(OBD_amount))
+        except Exception as e:
+                self.OBD_amount_label.config(text="Error")
 
     def split_files(self):
         try:
             main_file = self.file_entry.get()
             company_file = self.company_entry.get()
             SMS_amount = int(self.sms_entry.get())
-            days = int(self.days_entry.get())
+            days = int(self.days_entry_SMS.get())
+            days_OBD = int(self.days_entry_OBD.get())
             output_sms = self.sms_output_entry.get()
             output_obd = self.OBD_output_entry.get()
 
@@ -148,10 +189,10 @@ class Splitter:
                 start = end
 
             # OBD splitting
-            per_day_OCD = OBD_amount // days
-            extra_OCD = OBD_amount % days
+            per_day_OCD = OBD_amount // days_OBD
+            extra_OCD = OBD_amount % days_OBD
             start_OBD = 0
-            for i in range(days):
+            for i in range(days_OBD):
                 chunk_OCD = per_day_OCD + 1 if i < extra_OCD else per_day_OCD
                 ed = start_OBD + chunk_OCD
                 chunk_df_OCD = OCD_dataframe.iloc[start_OBD:ed]
