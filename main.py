@@ -1,31 +1,41 @@
 import tkinter as tk
-from tkinter import messagebox, filedialog
+from tkinter import messagebox, filedialog, ttk
 import os
 import pandas as pd
 import re
 
 class Splitter:
     def __init__(self, root):
+        self.root = root  # Store the root window reference
         root.title("Phone Number Splitter")
-        root.geometry("1100x700")
+        root.geometry("1100x750")
         
         self.entries = {}
         self.default_output_folder = os.path.join(os.path.expanduser("~"), "PhoneNumberSplitter_Output")
+        self.prefix_options = ["", "new_user", "inactive_user", "gross", "call_center", "old_version_app_user"]
 
         # File Selection Frame
         self.file_frame = tk.LabelFrame(root, text="Select Files", padx=10, pady=10)
-        self.file_frame.pack(padx=10, pady=10, fill="x")
+        self.file_frame.pack(padx=10, pady=5, fill="x")
 
         self._add_file_selector(self.file_frame, "Main File:", 0, is_company=False)
         self._add_file_selector(self.file_frame, "Company Numbers File:", 1, is_company=True)
 
         # Input Frame
         self.input_frame = tk.LabelFrame(root, text="Input Settings", padx=10, pady=10)
-        self.input_frame.pack(padx=10, pady=10, fill="x")
+        self.input_frame.pack(padx=10, pady=5, fill="x")
 
         self._add_input_field(self.input_frame, "SMS Amount:", 0, column=0, key="sms")
         self._add_input_field(self.input_frame, "Days for SMS:", row=1, column=0, key="days_sms")
         self._add_input_field(self.input_frame, "Days for OBD:", row=1, column=2, key="days_obd")
+
+        # Prefix Selection
+        tk.Label(self.input_frame, text="File Prefix:").grid(row=2, column=0, sticky="e", padx=5)
+        self.prefix_var = tk.StringVar()
+        self.prefix_dropdown = ttk.Combobox(self.input_frame, textvariable=self.prefix_var, 
+                                          values=self.prefix_options, state="readonly", width=15)
+        self.prefix_dropdown.grid(row=2, column=1, sticky="w", padx=5)
+        self.prefix_dropdown.current(0)
 
         self.obd_amount_label = tk.Label(self.input_frame, text="OBD Amount: N/A")
         self.obd_amount_label.grid(row=0, column=2, padx=10, sticky="w")
@@ -35,25 +45,29 @@ class Splitter:
 
         # Output Folder Frame
         self.output_frame = tk.LabelFrame(root, text="Select Output Folders", padx=10, pady=10)
-        self.output_frame.pack(padx=10, pady=10, fill="x")
+        self.output_frame.pack(padx=10, pady=5, fill="x")
 
         self._add_folder_selector(self.output_frame, "Output Folder for SMS:", 0, key="output_sms")
         self._add_folder_selector(self.output_frame, "Output Folder for OBD:", 1, key="output_obd")
 
         # Run Button
         self.run_button = tk.Button(root, text="Start Splitting", command=self.split_files, 
-                                  bg="green", fg="white", height=2, width=20)
+                                  bg="#4CAF50", fg="white", height=2, width=20, font=('Arial', 10, 'bold'))
         self.run_button.pack(pady=10)
 
         # Report Frame
         self.report_frame = tk.LabelFrame(root, text="Summary Report", padx=10, pady=10)
-        self.report_frame.pack(padx=10, pady=10, fill="both", expand=True)
+        self.report_frame.pack(padx=10, pady=5, fill="both", expand=True)
 
-        self.report_text = tk.Text(self.report_frame, state="disabled", height=15)
+        self.report_text = tk.Text(self.report_frame, state="disabled", height=15, wrap=tk.WORD)
         self.scrollbar = tk.Scrollbar(self.report_frame, command=self.report_text.yview)
         self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.report_text.config(yscrollcommand=self.scrollbar.set)
         self.report_text.pack(fill="both", expand=True)
+
+        # Status Bar
+        self.status_bar = tk.Label(root, text="Ready", bd=1, relief=tk.SUNKEN, anchor=tk.W)
+        self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
         # Set default output folders
         self.entries['output_sms'].insert(0, os.path.join(self.default_output_folder, "SMS"))
@@ -61,28 +75,28 @@ class Splitter:
 
     def _add_file_selector(self, parent, text, row, is_company):
         label = tk.Label(parent, text=text)
-        label.grid(row=row, column=0, sticky="e")
+        label.grid(row=row, column=0, sticky="e", padx=5)
         entry = tk.Entry(parent, width=70)
         entry.grid(row=row, column=1, padx=5)
         button = tk.Button(parent, text="Browse", command=lambda: self.browse_file(entry, is_company))
-        button.grid(row=row, column=2)
+        button.grid(row=row, column=2, padx=5)
         key = "company" if is_company else "main"
         self.entries[key] = entry
 
     def _add_folder_selector(self, parent, text, row, key):
         label = tk.Label(parent, text=text)
-        label.grid(row=row, column=0, sticky="e")
+        label.grid(row=row, column=0, sticky="e", padx=5)
         entry = tk.Entry(parent, width=70)
         entry.grid(row=row, column=1, padx=5)
         button = tk.Button(parent, text="Browse", command=lambda: self.browse_folder(entry))
-        button.grid(row=row, column=2)
+        button.grid(row=row, column=2, padx=5)
         self.entries[key] = entry
 
     def _add_input_field(self, parent, text, row, key, column=0):
         label = tk.Label(parent, text=text)
-        label.grid(row=row, column=column, sticky="e")
-        entry = tk.Entry(parent)
-        entry.grid(row=row, column=column + 1, padx=5, sticky="w")
+        label.grid(row=row, column=column, sticky="e", padx=5)
+        entry = tk.Entry(parent, width=15)
+        entry.grid(row=row, column=column+1, padx=5, sticky="w")
         vcmd = (parent.register(self._validate_positive_int), '%P')
         entry.config(validate='key', validatecommand=vcmd)
         self.entries[key] = entry
@@ -93,7 +107,7 @@ class Splitter:
         return value.isdigit() or value == ""
 
     def browse_file(self, entry, is_company):
-        path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv")])
+        path = filedialog.askopenfilename(filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")])
         if path:
             entry.delete(0, tk.END)
             entry.insert(0, path)
@@ -108,20 +122,22 @@ class Splitter:
 
     def detect_phone_column(self, df):
         for col in df.columns:
-            if df[col].astype(str).str.contains(r"\d{10,}").any():
+            if df[col].astype(str).str.contains(r'^(\+?\d{10,})$').any():
                 return col
-        return df.columns[0]  # Fallback to first column
+        for col in df.columns:
+            if 'phone' in col.lower() or 'number' in col.lower():
+                return col
+        return df.columns[0]
 
     def update_OBD_amount(self):
         try:
             main_file = self.entries["main"].get()
-            if not main_file:
-                return
-                
-            # Count lines without loading entire file
-            with open(main_file, 'r') as f:
-                total = sum(1 for _ in f) - 1  # Subtract header
+            if not main_file or not os.path.exists(main_file):
+                raise FileNotFoundError("Main file not selected or doesn't exist")
             
+            with open(main_file, 'r', encoding='utf-8-sig') as f:
+                total = sum(1 for _ in f) - 1
+                
             sms_amount = int(self.entries['sms'].get()) if self.entries['sms'].get().isdigit() else 0
             
             if sms_amount > total:
@@ -132,61 +148,66 @@ class Splitter:
                 self.obd_amount_label.config(text=f"OBD Amount: {obd_amount}", fg="black")
                 self.total_label.config(text=f"Total: {total}", fg="black")
                 
-        except Exception:
-            self.obd_amount_label.config(text="OBD Amount: N/A")
-            self.total_label.config(text="Total: N/A")
+        except Exception as e:
+            self.obd_amount_label.config(text="OBD Amount: N/A", fg="red")
+            self.total_label.config(text=f"Error: {str(e)}", fg="red")
 
     def clean_phone_series(self, series, remove_prefix=True):
-        series = series.dropna().astype(str)
-        series = series[~series.str.contains("[a-zA-Z]", regex=True)]
-        series = series.str.replace(".0", "", regex=False)
+        series = series.dropna().astype(str).str.strip()
+        series = series.str.replace(r'[^\d\+]', '', regex=True)
+        series = series[series != '']
         if remove_prefix:
-            series = series.str.replace(r'^977', '', regex=True)
+            series = series.str.replace(r'^\+?977', '', regex=True)
         return series[series.str.match(r'^\d{10,}$')]
 
     def validate_inputs(self):
         errors = []
         
-        # Validate main file
         if not self.entries["main"].get():
             errors.append("Main file not selected")
-            
-        # Validate company file
         if not self.entries["company"].get():
             errors.append("Company file not selected")
             
-        # Validate SMS amount
         try:
             sms_amount = int(self.entries['sms'].get())
             if sms_amount < 0:
-                errors.append("SMS amount cannot be negative")
+                errors.append("SMS amount must be positive")
         except ValueError:
             errors.append("Invalid SMS amount")
             
-        # Validate days
         try:
             days_sms = int(self.entries['days_sms'].get())
             days_obd = int(self.entries['days_obd'].get())
             if days_sms <= 0 or days_obd <= 0:
-                errors.append("Days must be positive numbers")
+                errors.append("Days must be positive integers")
         except ValueError:
             errors.append("Invalid days value")
             
-        # Validate output folders
         if not self.entries['output_sms'].get() or not self.entries['output_obd'].get():
             errors.append("Output folders not specified")
+            
+        try:
+            with open(self.entries["main"].get(), 'r', encoding='utf-8-sig') as f:
+                total = sum(1 for _ in f) - 1
+            if int(self.entries['sms'].get()) > total:
+                errors.append(f"SMS amount exceeds total numbers ({total})")
+        except:
+            pass
             
         return errors
 
     def split_files(self):
+        self.status_bar.config(text="Processing...", fg="blue")
+        self.root.update_idletasks()  # Now using self.root which is properly defined
+        
         try:
-            # Validate inputs
             errors = self.validate_inputs()
             if errors:
                 messagebox.showerror("Input Error", "\n".join(errors))
+                self.status_bar.config(text="Error in inputs", fg="red")
                 return
                 
-            # Get inputs
+            # Get all inputs including prefix
             main_file = self.entries["main"].get()
             company_file = self.entries["company"].get()
             sms_amount = int(self.entries['sms'].get())
@@ -194,60 +215,74 @@ class Splitter:
             days_obd = int(self.entries['days_obd'].get())
             output_sms = self.entries['output_sms'].get()
             output_obd = self.entries['output_obd'].get()
+            prefix = self.prefix_var.get()
+            
+            # Format prefix
+            if prefix:
+                prefix = f"{prefix}_"
 
             # Read and process main file
-            df_main = pd.read_csv(main_file, encoding="utf-8-sig")
+            df_main = pd.read_csv(main_file, encoding="utf-8-sig", dtype=str)
             df_main.columns = df_main.columns.str.strip()
             phone_col = self.detect_phone_column(df_main)
             df_main[phone_col] = self.clean_phone_series(df_main[phone_col], remove_prefix=False)
             total_numbers = len(df_main)
             
-            # Check if SMS amount exceeds total
-            if sms_amount > total_numbers:
-                messagebox.showerror("Error", f"SMS amount ({sms_amount}) exceeds total numbers ({total_numbers})")
-                return
-                
-            obd_amount = total_numbers - sms_amount
+            if total_numbers == 0:
+                raise ValueError("No valid phone numbers found in main file")
 
             # Read and process company file
-            df_company = pd.read_csv(company_file, encoding="utf-8-sig")
+            df_company = pd.read_csv(company_file, encoding="utf-8-sig", dtype=str)
             df_company.columns = df_company.columns.str.strip()
             company_col = self.detect_phone_column(df_company)
-            company_sms = self.clean_phone_series(df_company[company_col], remove_prefix=False)
-            company_obd = self.clean_phone_series(df_company[company_col], remove_prefix=True)
+            company_numbers = self.clean_phone_series(df_company[company_col], remove_prefix=False)
+            
+            if len(company_numbers) == 0:
+                raise ValueError("No valid company numbers found")
 
-            # Split data
+            # Verify SMS amount
+            obd_amount = total_numbers - sms_amount
+            if obd_amount < 0:
+                raise ValueError(f"SMS amount ({sms_amount}) exceeds total numbers ({total_numbers})")
+
+            # Prepare company numbers
+            company_sms = company_numbers
+            company_obd = self.clean_phone_series(company_numbers, remove_prefix=True)
+            
+            # Split main data
             df_sms = df_main.iloc[:sms_amount].copy()
             df_obd = df_main.iloc[sms_amount:].copy()
             df_obd[phone_col] = self.clean_phone_series(df_obd[phone_col], remove_prefix=True)
+
+            report = []
+            report.append("PROCESSING REPORT")
+            report.append("="*50)
+            report.append(f"Main numbers processed: {total_numbers}")
+            report.append(f"Company numbers found: {len(company_numbers)}")
+            report.append("")
 
             # Create output directories
             os.makedirs(output_sms, exist_ok=True)
             os.makedirs(output_obd, exist_ok=True)
 
-            report = []
-            report.append("Processing Report")
-            report.append("="*50)
-            report.append(f"Total main numbers: {total_numbers}")
-            report.append(f"Company numbers: {len(company_sms)}")
-            report.append("")
-
             # Process SMS files
             if sms_amount > 0:
-                chunk_size = sms_amount // days_sms
-                extra = sms_amount % days_sms
+                chunk_size_sms = sms_amount // days_sms
+                extra_sms = sms_amount % days_sms
                 start = 0
                 
-                report.append(f"SMS Files ({sms_amount} numbers across {days_sms} days):")
+                report.append(f"SMS FILES ({sms_amount} numbers across {days_sms} days):")
                 for i in range(days_sms):
-                    end = start + chunk_size + (1 if i < extra else 0)
+                    end = start + chunk_size_sms + (1 if i < extra_sms else 0)
                     chunk = df_sms.iloc[start:end]
-                    final = pd.concat([chunk, pd.DataFrame({phone_col: company_sms})], ignore_index=True)
+                    final_chunk = pd.concat([chunk, pd.DataFrame({phone_col: company_sms})], ignore_index=True)
                     
-                    filename = f"SMS_Day_{i+1}_of_{days_sms}.csv"
-                    final.to_csv(os.path.join(output_sms, filename), index=False)
+                    # Create filename with prefix and simple day number
+                    filename = f"{prefix}SMS_day{i+1}.csv"
+                    filepath = os.path.join(output_sms, filename)
+                    final_chunk.to_csv(filepath, index=False)
                     
-                    report.append(f"- {filename}: {len(chunk)} main + {len(company_sms)} company = {len(final)} total")
+                    report.append(f"- {filename}: {len(chunk)} main + {len(company_sms)} company = {len(final_chunk)} total")
                     start = end
                 report.append("")
             else:
@@ -255,20 +290,22 @@ class Splitter:
 
             # Process OBD files
             if obd_amount > 0:
-                chunk_size = obd_amount // days_obd
-                extra = obd_amount % days_obd
+                chunk_size_obd = obd_amount // days_obd
+                extra_obd = obd_amount % days_obd
                 start = 0
                 
-                report.append(f"OBD Files ({obd_amount} numbers across {days_obd} days):")
+                report.append(f"OBD FILES ({obd_amount} numbers across {days_obd} days):")
                 for i in range(days_obd):
-                    end = start + chunk_size + (1 if i < extra else 0)
+                    end = start + chunk_size_obd + (1 if i < extra_obd else 0)
                     chunk = df_obd.iloc[start:end]
-                    final = pd.concat([chunk, pd.DataFrame({phone_col: company_obd})], ignore_index=True)
+                    final_chunk = pd.concat([chunk, pd.DataFrame({phone_col: company_obd})], ignore_index=True)
                     
-                    filename = f"OBD_Day_{i+1}_of_{days_obd}.csv"
-                    final.to_csv(os.path.join(output_obd, filename), index=False)
+                    # Create filename with prefix and simple day number
+                    filename = f"{prefix}OBD_day{i+1}.csv"
+                    filepath = os.path.join(output_obd, filename)
+                    final_chunk.to_csv(filepath, index=False)
                     
-                    report.append(f"- {filename}: {len(chunk)} main + {len(company_obd)} company = {len(final)} total")
+                    report.append(f"- {filename}: {len(chunk)} main + {len(company_obd)} company = {len(final_chunk)} total")
                     start = end
             else:
                 report.append("No OBD files created (OBD amount = 0)")
@@ -279,15 +316,22 @@ class Splitter:
             self.report_text.insert(tk.END, "\n".join(report))
             self.report_text.config(state="disabled")
 
-            messagebox.showinfo("Success", "Processing completed successfully")
+            # Show success message
+            messagebox.showinfo("Success", "Files created successfully!")
+            self.status_bar.config(text="Processing completed", fg="green")
 
         except Exception as e:
-            messagebox.showerror("Error", f"An error occurred:\n{str(e)}")
+            error_msg = f"Error: {str(e)}"
+            messagebox.showerror("Processing Error", error_msg)
             self.report_text.config(state="normal")
-            self.report_text.insert(tk.END, f"\n\nERROR: {str(e)}")
+            self.report_text.insert(tk.END, f"\n\n{error_msg}")
             self.report_text.config(state="disabled")
+            self.status_bar.config(text="Processing failed", fg="red")
 
 if __name__ == "__main__":
     root = tk.Tk()
-    app = Splitter(root)
-    root.mainloop()
+    try:
+        app = Splitter(root)
+        root.mainloop()
+    except Exception as e:
+        messagebox.showerror("Fatal Error", f"Application failed to start:\n{str(e)}")
