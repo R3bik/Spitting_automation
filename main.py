@@ -1,18 +1,17 @@
 import tkinter as tk
-from tkinter import messagebox, filedialog, ttk
+from tkinter import messagebox, filedialog
 import os
 import pandas as pd
 import re
 
 class Splitter:
     def __init__(self, root):
-        self.root = root  # Store the root window reference
+        self.root = root
         root.title("Phone Number Splitter")
         root.geometry("1100x750")
         
         self.entries = {}
         self.default_output_folder = os.path.join(os.path.expanduser("~"), "PhoneNumberSplitter_Output")
-        self.prefix_options = ["", "new_user", "inactive_user", "gross", "call_center", "old_version_app_user"]
 
         # File Selection Frame
         self.file_frame = tk.LabelFrame(root, text="Select Files", padx=10, pady=10)
@@ -29,13 +28,11 @@ class Splitter:
         self._add_input_field(self.input_frame, "Days for SMS:", row=1, column=0, key="days_sms")
         self._add_input_field(self.input_frame, "Days for OBD:", row=1, column=2, key="days_obd")
 
-        # Prefix Selection
-        tk.Label(self.input_frame, text="File Prefix:").grid(row=2, column=0, sticky="e", padx=5)
-        self.prefix_var = tk.StringVar()
-        self.prefix_dropdown = ttk.Combobox(self.input_frame, textvariable=self.prefix_var, 
-                                          values=self.prefix_options, state="readonly", width=15)
-        self.prefix_dropdown.grid(row=2, column=1, sticky="w", padx=5)
-        self.prefix_dropdown.current(0)
+        # Custom Prefix Entry
+        tk.Label(self.input_frame, text="Custom Prefix:").grid(row=2, column=0, sticky="e", padx=5)
+        self.prefix_entry = tk.Entry(self.input_frame, width=20)
+        self.prefix_entry.grid(row=2, column=1, sticky="w", padx=5)
+        tk.Label(self.input_frame, text="(Leave blank for no prefix)").grid(row=2, column=2, sticky="w")
 
         self.obd_amount_label = tk.Label(self.input_frame, text="OBD Amount: N/A")
         self.obd_amount_label.grid(row=0, column=2, padx=10, sticky="w")
@@ -198,7 +195,7 @@ class Splitter:
 
     def split_files(self):
         self.status_bar.config(text="Processing...", fg="blue")
-        self.root.update_idletasks()  # Now using self.root which is properly defined
+        self.root.update_idletasks()
         
         try:
             errors = self.validate_inputs()
@@ -207,7 +204,7 @@ class Splitter:
                 self.status_bar.config(text="Error in inputs", fg="red")
                 return
                 
-            # Get all inputs including prefix
+            # Get all inputs including custom prefix
             main_file = self.entries["main"].get()
             company_file = self.entries["company"].get()
             sms_amount = int(self.entries['sms'].get())
@@ -215,7 +212,7 @@ class Splitter:
             days_obd = int(self.entries['days_obd'].get())
             output_sms = self.entries['output_sms'].get()
             output_obd = self.entries['output_obd'].get()
-            prefix = self.prefix_var.get()
+            prefix = self.prefix_entry.get().strip()
             
             # Format prefix
             if prefix:
@@ -259,6 +256,7 @@ class Splitter:
             report.append("="*50)
             report.append(f"Main numbers processed: {total_numbers}")
             report.append(f"Company numbers found: {len(company_numbers)}")
+            report.append(f"Custom prefix used: '{prefix}'" if prefix else "No prefix used")
             report.append("")
 
             # Create output directories
@@ -277,7 +275,6 @@ class Splitter:
                     chunk = df_sms.iloc[start:end]
                     final_chunk = pd.concat([chunk, pd.DataFrame({phone_col: company_sms})], ignore_index=True)
                     
-                    # Create filename with prefix and simple day number
                     filename = f"{prefix}SMS_day{i+1}.csv"
                     filepath = os.path.join(output_sms, filename)
                     final_chunk.to_csv(filepath, index=False)
@@ -300,7 +297,6 @@ class Splitter:
                     chunk = df_obd.iloc[start:end]
                     final_chunk = pd.concat([chunk, pd.DataFrame({phone_col: company_obd})], ignore_index=True)
                     
-                    # Create filename with prefix and simple day number
                     filename = f"{prefix}OBD_day{i+1}.csv"
                     filepath = os.path.join(output_obd, filename)
                     final_chunk.to_csv(filepath, index=False)
