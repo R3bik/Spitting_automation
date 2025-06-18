@@ -99,11 +99,13 @@ class Splitter:
     def update_OBD_amount(self):
         try:
             main_file = self.entries["main"].get()
-            sms_amount = int(self.entries['sms'].get())
+            if not os.path.exists(main_file):
+                raise Exception("Main file not found")
             df = pd.read_csv(main_file, encoding="utf-8-sig")
             df.columns = df.columns.str.strip()
             phone_col = df.columns[0]
             total = len(df)
+            sms_amount = int(self.entries['sms'].get()) if self.entries['sms'].get().isdigit() else 0
             obd_amount = total - sms_amount
             self.obd_amount_label.config(text=f"OBD Amount: {obd_amount if obd_amount >= 0 else 'Error'}")
             self.total_label.config(text=f"Total: {total}")
@@ -124,14 +126,18 @@ class Splitter:
             df_main = pd.read_csv(main_file, encoding="utf-8-sig")
             df_main.columns = df_main.columns.str.strip()
             phone_col = df_main.columns[0]
-            df_company = pd.read_csv(company_file)
+
+            df_company = pd.read_csv(company_file, encoding="utf-8-sig")
+            df_company.columns = df_company.columns.str.strip()
+            company_numbers = df_company[df_company.columns[0]].astype(str)
+            company_numbers = company_numbers[~company_numbers.str.contains("[a-zA-Z]", regex=True)]
+            company_numbers = company_numbers.str.replace(".0", "", regex=False)
+
+            company_sms = pd.DataFrame(company_numbers, columns=[phone_col])
+            company_obd = pd.DataFrame(company_numbers.str.replace("^977", "", regex=True), columns=[phone_col])
 
             total_numbers = len(df_main)
             obd_amount = total_numbers - sms_amount
-
-            df_company_cleaned = df_company.dropna()
-            company_numbers = df_company_cleaned[df_company_cleaned.columns[0]].astype(str)
-            company_numbers = company_numbers[~company_numbers.str.contains("[a-zA-Z]", regex=True)]
 
             df_sms = df_main.iloc[:sms_amount].copy()
             df_obd = df_main.iloc[sms_amount:].copy()
@@ -140,13 +146,8 @@ class Splitter:
             df_obd[phone_col] = df_obd[phone_col].astype(str).str.replace(".0", "", regex=False)
             df_obd[phone_col] = df_obd[phone_col].str.replace("^977", "", regex=True)
 
-            company_sms = pd.DataFrame(company_numbers, columns=[phone_col])
-            company_obd = company_sms.copy()
-            company_obd[phone_col] = company_obd[phone_col].str.replace("^977", "", regex=True)
-
             report = []
 
-            # SMS
             if sms_amount > 0:
                 chunk_size_sms = sms_amount // days_sms
                 extra_sms = sms_amount % days_sms
@@ -163,7 +164,6 @@ class Splitter:
             else:
                 report.append("\u26a0\ufe0f SMS amount is 0. No SMS files were created.")
 
-            # OBD
             if obd_amount > 0:
                 chunk_size_obd = obd_amount // days_obd
                 extra_obd = obd_amount % days_obd
@@ -179,6 +179,8 @@ class Splitter:
                     start = end
             else:
                 report.append("\u26a0\ufe0f OBD amount is 0. No OBD files were created.")
+
+            report.append(f"\nAppended {len(company_sms)} company numbers to each file.")
 
             self.report_text.config(state="normal")
             self.report_text.delete("1.0", tk.END)
