@@ -1,27 +1,36 @@
 import tkinter as tk
-from tkinter import messagebox, filedialog
+from tkinter import messagebox, filedialog, ttk
 import os
 import pandas as pd
 import re
+import chardet
+import sys
 
 class Splitter:
     def __init__(self, root):
         self.root = root
-        root.title("Phone Number Splitter")
-        root.geometry("1100x750")
+        self.setup_ui()
+        
+    def setup_ui(self):
+        self.root.title("Phone Number Splitter")
+        self.root.geometry("1100x750")
+        
+        # Configure window to be resizable
+        self.root.grid_rowconfigure(0, weight=1)
+        self.root.grid_columnconfigure(0, weight=1)
         
         self.entries = {}
         self.default_output_folder = os.path.join(os.path.expanduser("~"), "PhoneNumberSplitter_Output")
 
         # File Selection Frame
-        self.file_frame = tk.LabelFrame(root, text="Select Files", padx=10, pady=10)
+        self.file_frame = tk.LabelFrame(self.root, text="Select Files", padx=10, pady=10)
         self.file_frame.pack(padx=10, pady=5, fill="x")
 
         self._add_file_selector(self.file_frame, "Main File:", 0, is_company=False)
         self._add_file_selector(self.file_frame, "Company Numbers File:", 1, is_company=True)
 
         # Input Frame
-        self.input_frame = tk.LabelFrame(root, text="Input Settings", padx=10, pady=10)
+        self.input_frame = tk.LabelFrame(self.root, text="Input Settings", padx=10, pady=10)
         self.input_frame.pack(padx=10, pady=5, fill="x")
 
         self._add_input_field(self.input_frame, "SMS Amount:", 0, column=0, key="sms")
@@ -41,19 +50,19 @@ class Splitter:
         self.total_label.grid(row=0, column=4, padx=10, sticky="w")
 
         # Output Folder Frame
-        self.output_frame = tk.LabelFrame(root, text="Select Output Folders", padx=10, pady=10)
+        self.output_frame = tk.LabelFrame(self.root, text="Select Output Folders", padx=10, pady=10)
         self.output_frame.pack(padx=10, pady=5, fill="x")
 
         self._add_folder_selector(self.output_frame, "Output Folder for SMS:", 0, key="output_sms")
         self._add_folder_selector(self.output_frame, "Output Folder for OBD:", 1, key="output_obd")
 
         # Run Button
-        self.run_button = tk.Button(root, text="Start Splitting", command=self.split_files, 
+        self.run_button = tk.Button(self.root, text="Start Splitting", command=self.split_files, 
                                   bg="#4CAF50", fg="white", height=2, width=20, font=('Arial', 10, 'bold'))
         self.run_button.pack(pady=10)
 
         # Report Frame
-        self.report_frame = tk.LabelFrame(root, text="Summary Report", padx=10, pady=10)
+        self.report_frame = tk.LabelFrame(self.root, text="Summary Report", padx=10, pady=10)
         self.report_frame.pack(padx=10, pady=5, fill="both", expand=True)
 
         self.report_text = tk.Text(self.report_frame, state="disabled", height=15, wrap=tk.WORD)
@@ -63,7 +72,7 @@ class Splitter:
         self.report_text.pack(fill="both", expand=True)
 
         # Status Bar
-        self.status_bar = tk.Label(root, text="Ready", bd=1, relief=tk.SUNKEN, anchor=tk.W)
+        self.status_bar = tk.Label(self.root, text="Ready", bd=1, relief=tk.SUNKEN, anchor=tk.W)
         self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
         # Set default output folders
@@ -116,6 +125,26 @@ class Splitter:
         if path:
             entry.delete(0, tk.END)
             entry.insert(0, path)
+
+    def detect_file_encoding(self, filepath):
+        """Detect file encoding using chardet"""
+        with open(filepath, 'rb') as f:
+            rawdata = f.read(10000)  # Read first 10k bytes to guess encoding
+        result = chardet.detect(rawdata)
+        return result['encoding']
+
+    def read_csv_with_encoding(self, filepath):
+        """Read CSV with automatic encoding detection"""
+        try:
+            # First try UTF-8 with BOM (common for Excel exports)
+            return pd.read_csv(filepath, encoding='utf-8-sig', dtype=str)
+        except UnicodeDecodeError:
+            try:
+                # If UTF-8 fails, try detected encoding
+                encoding = self.detect_file_encoding(filepath)
+                return pd.read_csv(filepath, encoding=encoding, dtype=str)
+            except Exception as e:
+                raise ValueError(f"Cannot read file {filepath}. Detected encoding: {encoding}. Error: {str(e)}")
 
     def detect_phone_column(self, df):
         for col in df.columns:
@@ -218,24 +247,30 @@ class Splitter:
             if prefix:
                 prefix = f"{prefix}_"
 
-            # Read and process main file
-            df_main = pd.read_csv(main_file, encoding="utf-8-sig", dtype=str)
-            df_main.columns = df_main.columns.str.strip()
-            phone_col = self.detect_phone_column(df_main)
-            df_main[phone_col] = self.clean_phone_series(df_main[phone_col], remove_prefix=False)
-            total_numbers = len(df_main)
-            
-            if total_numbers == 0:
-                raise ValueError("No valid phone numbers found in main file")
+            # Read and process main file with encoding detection
+            try:
+                df_main = self.read_csv_with_encoding(main_file)
+                df_main.columns = df_main.columns.str.strip()
+                phone_col = self.detect_phone_column(df_main)
+                df_main[phone_col] = self.clean_phone_series(df_main[phone_col], remove_prefix=False)
+                total_numbers = len(df_main)
+                
+                if total_numbers == 0:
+                    raise ValueError("No valid phone numbers found in main file")
+            except Exception as e:
+                raise ValueError(f"Error processing main file: {str(e)}")
 
-            # Read and process company file
-            df_company = pd.read_csv(company_file, encoding="utf-8-sig", dtype=str)
-            df_company.columns = df_company.columns.str.strip()
-            company_col = self.detect_phone_column(df_company)
-            company_numbers = self.clean_phone_series(df_company[company_col], remove_prefix=False)
-            
-            if len(company_numbers) == 0:
-                raise ValueError("No valid company numbers found")
+            # Read and process company file with encoding detection
+            try:
+                df_company = self.read_csv_with_encoding(company_file)
+                df_company.columns = df_company.columns.str.strip()
+                company_col = self.detect_phone_column(df_company)
+                company_numbers = self.clean_phone_series(df_company[company_col], remove_prefix=False)
+                
+                if len(company_numbers) == 0:
+                    raise ValueError("No valid company numbers found")
+            except Exception as e:
+                raise ValueError(f"Error processing company file: {str(e)}")
 
             # Verify SMS amount
             obd_amount = total_numbers - sms_amount
@@ -331,3 +366,4 @@ if __name__ == "__main__":
         root.mainloop()
     except Exception as e:
         messagebox.showerror("Fatal Error", f"Application failed to start:\n{str(e)}")
+        sys.exit(1)
