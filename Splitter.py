@@ -310,9 +310,9 @@ class Splitter:
                     chunk = df_sms.iloc[start:end]
                     final_chunk = pd.concat([chunk, pd.DataFrame({phone_col: company_sms})], ignore_index=True)
                     
-                    filename = f"{prefix}SMS_day{i+1}.csv"
+                    filename = f"{prefix}SMS_day{i+1}.txt"
                     filepath = os.path.join(output_sms, filename)
-                    final_chunk.to_csv(filepath, index=False)
+                    final_chunk.to_csv(filepath, index=False, header=False,sep='\t')
                     
                     report.append(f"- {filename}: {len(chunk)} main + {len(company_sms)} company = {len(final_chunk)} total")
                     start = end
@@ -332,9 +332,9 @@ class Splitter:
                     chunk = df_obd.iloc[start:end]
                     final_chunk = pd.concat([chunk, pd.DataFrame({phone_col: company_obd})], ignore_index=True)
                     
-                    filename = f"{prefix}OBD_day{i+1}.csv"
+                    filename = f"{prefix}OBD_day{i+1}.txt"
                     filepath = os.path.join(output_obd, filename)
-                    final_chunk.to_csv(filepath, index=False)
+                    final_chunk.to_csv(filepath, index=False, header=False,sep='\t')
                     
                     report.append(f"- {filename}: {len(chunk)} main + {len(company_obd)} company = {len(final_chunk)} total")
                     start = end
